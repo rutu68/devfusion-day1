@@ -5,9 +5,17 @@ from app.models.student import StudentCreate, StudentUpdate
 
 async def create_student(student: StudentCreate):
     student_dict = student.model_dump()
+    
+    # Get AI recommendation from the ML model
+    from ml_service import predict_elective
+    student_dict["recommended_elective"] = predict_elective(student_dict["marks"])
+
     student_dict["_id"] = str(uuid.uuid4())
+
     await student_collection.insert_one(student_dict)
+
     new_student = await student_collection.find_one({"_id": student_dict["_id"]})
+
     return student_entity(new_student)
 
 async def get_all_students():
@@ -22,11 +30,22 @@ async def get_student(id: str):
 
 async def update_student(id: str, data: StudentUpdate):
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    if "marks" in update_data:
+        from ml_service import predict_elective
+        update_data["recommended_elective"] = predict_elective(update_data["marks"])
+
     if update_data:
-        await student_collection.update_one({"_id": id}, {"$set": update_data})
+        await student_collection.update_one(
+            {"_id": id},
+            {"$set": update_data}
+        )
+
     student = await student_collection.find_one({"_id": id})
+
     if student:
         return student_entity(student)
+
     return None
 
 async def delete_student(id: str):
